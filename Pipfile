@@ -10,6 +10,7 @@ plumberhub-client = "*"
 pyedflib = "*"
 keyboard = "*"
 numpy = "==1.19.3"
+rope = "*"
 
 [requires]
 python_version = "3.9"

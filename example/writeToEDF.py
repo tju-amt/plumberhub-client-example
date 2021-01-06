@@ -6,8 +6,34 @@ import time
 from plumberhub import PlumberHubClient
 
 CHANNEL_NUMBER = 8
+SAMPLE_RATE = 100
 
 edf_file = None
+
+class SampleBuffer:
+    cache = []
+    length = 0
+
+    def __init__(self):
+        self.flush()
+
+    def flush(self):
+        self.cache.clear()
+        self.length = 0
+
+        for index in range(8):
+            self.cache.append([])
+
+    def append(self, dataList):
+        index = 0
+
+        while index < CHANNEL_NUMBER:
+            self.cache[index].append(dataList[index])
+            index += 1
+        
+        self.length += 1
+
+sample_buffer = SampleBuffer()
 
 def createEDF():
     global edf_file
@@ -23,7 +49,7 @@ def createEDF():
         channel_info_list.append({
             'label': 'ch_' + str(index),
             'dimension': 'μV',
-            'sample_rate': 100,
+            'sample_rate': SAMPLE_RATE,
             'physical_max': 100,
             'physical_min': -100,
             'digital_max': 32767,
@@ -41,15 +67,21 @@ def clearEDF():
         edf_file.close()
         edf_file == None
 
+
 def handleSample(sample):
     global edf_file
 
     if (edf_file != None):
-        npSample = []
+        if sample_buffer.length < SAMPLE_RATE:
+            sample_buffer.append(sample.dataList)
+        else:
+            npSample = []
 
-        for value in sample.dataList:
-            npSample.append(np.array([value]))
-        edf_file.writeSamples(npSample)
+            for channel in sample_buffer.cache:
+                npSample.append(np.array(channel))
+
+            edf_file.writeSamples(npSample)
+            sample_buffer.flush()
 
 client = PlumberHubClient(
     hostname = '127.0.0.1',
@@ -64,5 +96,6 @@ while True:
             createEDF()
 
     elif keyboard.is_pressed('ctrl'):
-        print('Finished!')
-        clearEDF()
+        if (edf_file != None):
+            print('Finished!')
+            clearEDF()
