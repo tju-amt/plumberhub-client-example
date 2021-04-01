@@ -97,5 +97,5 @@ while True:
 
     elif keyboard.is_pressed('ctrl'):
         if (edf_file != None):
-            print('Finished!')
             clearEDF()
+            print('Finished!')
