@@ -4,6 +4,7 @@ import keyboard
 import random
 import time
 from plumberhub import PlumberHubClient
+import datetime
 
 # need to modify
 CHANNEL_NUMBER = 16
@@ -93,8 +94,9 @@ def handleSample(sample):
     if (eegEdf_file != None):
         if sampleStartTime == 0 :
             sampleStartTime = sample.at
-            eegEdf_file.setStartdatetime = sampleStartTime/1000
-
+            eegEdf_file.setStartdatetime(datetime.datetime.fromtimestamp(sampleStartTime/1000)) 
+            eventEdf_file.setStartdatetime(datetime.datetime.fromtimestamp(sampleStartTime/1000))
+            
         if sample_buffer.length < SAMPLE_RATE:
             sample_buffer.append(sample.dataList)
         else:
@@ -111,23 +113,20 @@ def handleEvent(event):
     global sampleStartTime
 
     if (eventEdf_file != None):
-        event_second = event.at/1000
-        offset = event_second - sampleStartTime 
-        eventEdf_file.writeAnnotation(offset,0,event.event)
+        event_second = event.at
+        offset = (event_second - sampleStartTime)/1000 
+        print(offset)
+        eventEdf_file.writeAnnotation(offset,0,'1s event')
 
 client = PlumberHubClient(
     hostname = '127.0.0.1',
     port = 8080,
-    client_id = '4b342ebb938f7c4255efa80d9125abda8fea7042e6e0ce60e5cb5fd942199b77',
+    client_id = 'a5a3fbf21b2a55fd68ad35753aefa39e17b9a15cbaa0adbe57dd0cbfc0521498',
     onsample = handleSample,  
     onevent = handleEvent
 )
  
 while True:  
-    
-    length = len(threading.enumerate())
-    print('当前运行的线程数为：%d' % length)
-
 
     if keyboard.is_pressed('space'):
         if (eegEdf_file == None):
