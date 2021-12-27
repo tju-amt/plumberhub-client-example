@@ -5,10 +5,13 @@ import random
 import time
 from plumberhub import PlumberHubClient
 
-CHANNEL_NUMBER = 8
-SAMPLE_RATE = 100
+# need to modify
+CHANNEL_NUMBER = 16
+SAMPLE_RATE = 1000
 
-edf_file = None
+eegEdf_file = None
+eventEdf_file = None
+sampleStartTime = 0
 
 class SampleBuffer:
     cache = []
@@ -21,7 +24,7 @@ class SampleBuffer:
         self.cache.clear()
         self.length = 0
 
-        for index in range(8):
+        for index in range(CHANNEL_NUMBER):
             self.cache.append([])
 
     def append(self, dataList):
@@ -35,13 +38,19 @@ class SampleBuffer:
 
 sample_buffer = SampleBuffer()
 
-def createEDF():
-    global edf_file
+def createEDF(type):  
+    global eegEdf_file
+    global eventEdf_file
 
     now = time.strftime("%Y-%m-%d_%H_%M_%S", time.localtime())
-    filename = r"recorder-" + now + r".edf"
+    filename = r"recorder-" + now + type + r".edf"
     print("File: " + filename)
-    edf_file = pyedflib.EdfWriter(filename, CHANNEL_NUMBER, file_type = pyedflib.FILETYPE_BDFPLUS)
+    
+    if(type == 'eeg'):
+        eegEdf_file = pyedflib.EdfWriter(filename, CHANNEL_NUMBER, file_type = pyedflib.FILETYPE_BDFPLUS)
+    elif(type == 'event'):
+        eventEdf_file = pyedflib.EdfWriter(filename, CHANNEL_NUMBER, file_type = pyedflib.FILETYPE_BDFPLUS)
+
 
     channel_info_list = []
 
@@ -50,28 +59,42 @@ def createEDF():
             'label': 'ch_' + str(index),
             'dimension': 'μV',
             'sample_rate': SAMPLE_RATE,
-            'physical_max': 100,
-            'physical_min': -100,
+            'physical_max': 90000,
+            'physical_min': -90000,
             'digital_max': 32767,
             'digital_min': -32768,
             'transducer': '',
             'prefilter':''
         })
-    
-    edf_file.setSignalHeaders(channel_info_list)
+
+    if(type == 'eeg'):    
+        eegEdf_file.setSignalHeaders(channel_info_list)
+
 
 def clearEDF():
-    global edf_file
+    global eegEdf_file
+    global sampleStartTime
 
-    if (edf_file != None):
-        edf_file.close()
-        edf_file == None
+    if (eegEdf_file != None):
+        eegEdf_file.close()
+        eegEdf_file == None
+    
+    if (eventEdf_file !=None):
+        eventEdf_file.close()
+        eventEdf_file == None       
+
+    sampleStartTime = 0 
 
 
 def handleSample(sample):
-    global edf_file
+    global eegEdf_file
+    global sampleStartTime
 
-    if (edf_file != None):
+    if (eegEdf_file != None):
+        if sampleStartTime == 0 :
+            sampleStartTime = sample.at
+            eegEdf_file.setStartdatetime = sampleStartTime/1000
+
         if sample_buffer.length < SAMPLE_RATE:
             sample_buffer.append(sample.dataList)
         else:
@@ -80,22 +103,41 @@ def handleSample(sample):
             for channel in sample_buffer.cache:
                 npSample.append(np.array(channel))
 
-            edf_file.writeSamples(npSample)
+            eegEdf_file.writeSamples(npSample)
             sample_buffer.flush()
+
+def handleEvent(event):
+    global eventEdf_file
+    global sampleStartTime
+
+    if (eventEdf_file != None):
+        event_second = event.at/1000
+        offset = event_second - sampleStartTime 
+        eventEdf_file.writeAnnotation(offset,0,event.event)
 
 client = PlumberHubClient(
     hostname = '127.0.0.1',
     port = 8080,
-    client_id = '314dee1f82e82106c8ab4d51ee933c9a4c09209dfebc35b2f2f5fd55be73302e',
-    onsample = handleSample
+    client_id = '4b342ebb938f7c4255efa80d9125abda8fea7042e6e0ce60e5cb5fd942199b77',
+    onsample = handleSample,  
+    onevent = handleEvent
 )
+ 
+while True:  
+    
+    length = len(threading.enumerate())
+    print('当前运行的线程数为：%d' % length)
 
-while True:
+
     if keyboard.is_pressed('space'):
-        if (edf_file == None):
-            createEDF()
-
+        if (eegEdf_file == None):
+            createEDF('eeg')
+        
+        if (eventEdf_file == None):
+            createEDF('event')
+        
+        
     elif keyboard.is_pressed('ctrl'):
-        if (edf_file != None):
+        if ((eegEdf_file != None) and (eventEdf_file != None)):
             clearEDF()
             print('Finished!')
