@@ -3,16 +3,22 @@ import pyedflib
 import keyboard
 import random
 import time
+import sys
+sys.path.append('../')
 from plumberhub import PlumberHubClient
 import datetime
 
-# need to modify
+# montage
 CHANNEL_NUMBER = 16
+CHANNEL_NAME = ['FZ','FCZ','CZ','P5','P3','PZ','P4','P6','PO5','PO3','POZ','PO4','PO6','O1','OZ','O2']
+
 SAMPLE_RATE = 1000
 
+# file param    
 eegEdf_file = None
 eventEdf_file = None
 sampleStartTime = 0
+times = 0
 
 class SampleBuffer:
     cache = []
@@ -44,8 +50,9 @@ def createEDF(type):
     global eventEdf_file
 
     now = time.strftime("%Y-%m-%d_%H_%M_%S", time.localtime())
-    filename = r"recorder-" + now + type + r".edf"
-    print("File: " + filename)
+    filename = r"recorder-" + now + type + r".bdf"
+    
+    print("File: " + filename + " created!")
     
     if(type == 'eeg'):
         eegEdf_file = pyedflib.EdfWriter(filename, CHANNEL_NUMBER, file_type = pyedflib.FILETYPE_BDFPLUS)
@@ -57,11 +64,11 @@ def createEDF(type):
 
     for index in range(CHANNEL_NUMBER):
         channel_info_list.append({
-            'label': 'ch_' + str(index),
+            'label': CHANNEL_NAME[index],
             'dimension': 'μV',
             'sample_rate': SAMPLE_RATE,
-            'physical_max': 90000,
-            'physical_min': -90000,
+            'physical_max': 5000,    #5000uV
+            'physical_min': -5000,   #-5000uV
             'digital_max': 32767,
             'digital_min': -32768,
             'transducer': '',
@@ -90,38 +97,37 @@ def clearEDF():
 def handleSample(sample):
     global eegEdf_file
     global sampleStartTime
-
+    global times
+    
+    
     if (eegEdf_file != None):
-        if sampleStartTime == 0 :
-            sampleStartTime = sample.at
-            eegEdf_file.setStartdatetime(datetime.datetime.fromtimestamp(sampleStartTime/1000)) 
-            eventEdf_file.setStartdatetime(datetime.datetime.fromtimestamp(sampleStartTime/1000))
             
-        if sample_buffer.length < SAMPLE_RATE:
-            sample_buffer.append(sample.dataList)
+        if sample_buffer.length < SAMPLE_RATE-1:
+            sample_buffer.append(sample.dataList) 
         else:
             npSample = []
-
+            sample_buffer.append(sample.dataList)
             for channel in sample_buffer.cache:
-                npSample.append(np.array(channel))
-
+                npSample.append(np.array(channel)) 
+               
             eegEdf_file.writeSamples(npSample)
             sample_buffer.flush()
+    
 
-def handleEvent(event):
+def handleEvent(event): 
     global eventEdf_file
     global sampleStartTime
 
-    if (eventEdf_file != None):
+    if (eventEdf_file != None): 
         event_second = event.at
-        offset = (event_second - sampleStartTime)/1000 
-        print(offset)
+        offset = (event_second - sampleStartTime)/1000  
+        print(offset) 
         eventEdf_file.writeAnnotation(offset,0,'1s event')
 
 client = PlumberHubClient(
     hostname = '127.0.0.1',
     port = 8080,
-    client_id = 'a5a3fbf21b2a55fd68ad35753aefa39e17b9a15cbaa0adbe57dd0cbfc0521498',
+    client_id = 'ba42f834e21980f008ca82110d89a9b4154ef13880d8b0d827eecaf759699d44',
     onsample = handleSample,  
     onevent = handleEvent
 )
@@ -139,4 +145,4 @@ while True:
     elif keyboard.is_pressed('ctrl'):
         if ((eegEdf_file != None) and (eventEdf_file != None)):
             clearEDF()
-            print('Finished!')
+            print('Finished!') 
